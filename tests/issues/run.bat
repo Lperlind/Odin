@@ -7,6 +7,8 @@ set COMMON=-collection:tests=..\..
 
 @echo on
 
+set ERROR_DID_OCCUR=0
+
 ..\..\..\odin test ..\test_issue_829.odin %COMMON% -file
 ..\..\..\odin test ..\test_issue_1592.odin %COMMON% -file
 ..\..\..\odin test ..\test_issue_2087.odin %COMMON% -file

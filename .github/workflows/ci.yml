@@ -158,7 +158,7 @@ jobs:
       - name: Odin issues tests
         run: |
           cd tests/issues
-          ./run.sh
+          ./run.bat
       - name: core:math/big tests
         shell: cmd
         run: |
