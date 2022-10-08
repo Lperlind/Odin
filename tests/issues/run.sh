@@ -15,5 +15,5 @@ $ODIN test ../test_issue_2113.odin $COMMON -file -debug
 
 set +x
 
-popd build
+popd
 rm -rf build
