@@ -71,6 +71,20 @@ MetalLayer_nextDrawable :: proc(self: ^MetalLayer) -> ^MetalDrawable {
 	return msgSend(^MetalDrawable, self, "nextDrawable")
 }
 
+@(objc_type=MetalLayer, objc_name="setDisplaySyncEnabled")
+MetalLayer_setDisplaySyncEnabled :: proc(self: ^MetalLayer, ok: NS.BOOL) {
+	msgSend(nil, self, "setDisplaySyncEnabled:", ok)
+}
+
+@(objc_type=MetalLayer, objc_name="displaySyncEnabled")
+MetalLayer_displaySyncEnabled :: proc(self: ^MetalLayer) -> NS.BOOL {
+	return msgSend(NS.BOOL, self, "displaySyncEnabled")
+}
+
+@(objc_type=MetalLayer, objc_name="setMaximumDrawableCount")
+MetalLayer_setMaximumDrawableCount :: proc(self: ^MetalLayer, count: NS.UInteger) {
+	msgSend(nil, self, "setMaximumDrawableCount:", count)
+}
 
 
 @(objc_class="CAMetalDrawable")
@@ -79,6 +93,11 @@ MetalDrawable :: struct { using _: MTL.Drawable }
 @(objc_type=MetalDrawable, objc_name="layer")
 MetalDrawable_layer :: proc(self: ^MetalDrawable) -> ^MetalLayer {
 	return msgSend(^MetalLayer, self, "layer")
+}
+
+@(objc_type=MetalLayer, objc_name="setDrawableSize")
+MetalLayer_setDrawableSize :: proc(self: ^MetalLayer, size: NS.Size) {
+	msgSend(nil, self, "setDrawableSize:", size)
 }
 
 @(objc_type=MetalDrawable, objc_name="texture")

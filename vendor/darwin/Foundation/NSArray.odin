@@ -31,6 +31,7 @@ Array_initWithCoder :: proc(self: ^Array, coder: ^Coder) -> ^Array {
 Array_object :: proc(self: ^Array, index: UInteger) -> ^Object {
 	return msgSend(^Object, self, "objectAtIndex:", index)
 }
+
 @(objc_type=Array, objc_name="objectAs")
 Array_objectAs :: proc(self: ^Array, index: UInteger, $T: typeid) -> T where intrinsics.type_is_pointer(T), intrinsics.type_is_subtype_of(T, ^Object)  {
 	return (T)(Array_object(self, index))

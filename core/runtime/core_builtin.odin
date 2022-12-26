@@ -42,8 +42,6 @@ copy_from_string :: proc "contextless" (dst: $T/[]$E/u8, src: $S/string) -> int 
 @builtin
 copy :: proc{copy_slice, copy_from_string}
 
-
-
 @builtin
 unordered_remove :: proc(array: ^$D/[dynamic]$T, index: int, loc := #caller_location) #no_bounds_check {
 	bounds_check_error_loc(loc, index, len(array))

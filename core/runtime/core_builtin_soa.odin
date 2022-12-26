@@ -410,6 +410,45 @@ delete_soa_dynamic_array :: proc(array: $T/#soa[dynamic]$E, loc := #caller_locat
 	}
 }
 
+unordered_remove_soa_dynamic_array :: proc(array: ^$T/#soa[dynamic]$E, index: int, loc := #caller_location) #no_bounds_check {
+	bounds_check_error_loc(loc, index, len(array))
+
+	field_count := uintptr(intrinsics.type_struct_field_count(E))
+	footer := (^Raw_SOA_Footer_Slice)(uintptr(array) + field_count*size_of(rawptr))
+	footer.len -= 1
+
+	if index != footer.len {
+		ti := type_info_of(typeid_of(T))
+		ti = type_info_base(ti)
+		si := &ti.variant.(Type_Info_Struct)
+
+		data := (^rawptr)(array)^
+
+		for i in 0..<field_count {
+			type := si.types[i].variant.(Type_Info_Pointer).elem
+
+			dst := uintptr(data) + uintptr(type.size * index)
+			src := uintptr(data) + uintptr(type.size * footer.len)
+			mem_copy(rawptr(dst), rawptr(src), type.size)
+		}
+	}
+}
+
+clear_soa_dynamic_array :: proc(array: ^$T/#soa[dynamic]$E) {
+	field_count := uintptr(intrinsics.type_struct_field_count(E))
+	footer := (^Raw_SOA_Footer_Slice)(uintptr(array) + field_count*size_of(rawptr))
+	footer.len = 0
+}
+
+@builtin
+clear_soa :: proc{
+	clear_soa_dynamic_array,
+}
+
+@builtin
+unordered_remove_soa :: proc{
+	unordered_remove_soa_dynamic_array,
+}
 
 @builtin
 delete_soa :: proc{
