@@ -16,8 +16,6 @@ Process :: struct {
 	stdout: os.Handle,
 	stderr: os.Handle,
 	stdin: os.Handle,
-
-	exit_code: int,
 }
 
 Process_Error :: enum {
@@ -46,18 +44,12 @@ run :: proc(process_path: string, arguments: []string, options := Options {}) ->
 	return _run(process_path, arguments, options)
 }
 
-wait :: proc(process: ^Process) -> int {
-	assert(process != nil)
+wait :: proc(process: Process) -> int {
 	if process.pid.handle <= 0 {
 		panic("Process has not been created with a valid handle")
 	}
-	exit_code := _wait(process^)
-	process.exit_code = exit_code
+	exit_code := _wait(process)
 	return exit_code
-}
-
-get_error_code :: proc(process: Process) -> int {
-	return process.exit_code
 }
 
 delete :: proc(process: ^Process) {
@@ -88,8 +80,8 @@ run_and_get_stdout :: proc(process_path: string, arguments: []string, options :=
 		strings.write_string(&sb, string(temp_buffer[:bytes_read]))
 	}
 
-	error_code := wait(&process)
-	return strings.to_string(sb), error_code == 0 ? nil : error_code
+	exit_code := wait(process)
+	return strings.to_string(sb), exit_code == 0 ? nil : exit_code
 }
 
 run_and_wait :: proc(process_path: string, arguments: []string, options := Options {}) -> Run_Process_Error {
@@ -99,6 +91,6 @@ run_and_wait :: proc(process_path: string, arguments: []string, options := Optio
 
 	process := run(process_path, arguments, options) or_return
 	defer delete(&process)
-	error_code := wait(&process)
-	return error_code == 0 ? nil : error_code
+	exit_code := wait(process)
+	return exit_code == 0 ? nil : exit_code
 }

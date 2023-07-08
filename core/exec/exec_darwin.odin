@@ -86,7 +86,7 @@ _run :: proc(process_path: string, arguments: []string, options := Options {}) -
 		@(static) fd: c.int
 		if ! got_fd {
 			got_fd = true
-			handle, res := os.open("/dev/null", os.O_WRONLY)
+			handle, _ := os.open("/dev/null", os.O_WRONLY)
 			fd = auto_cast(handle)
 		}
 		return fd
