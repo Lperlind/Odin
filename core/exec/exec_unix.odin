@@ -42,6 +42,18 @@ winsize :: struct {
 	ws_ypixel: c.ushort,
 }
 
+@(private="file")
+POLLIN :: 0x0001
+@(private="file")
+POLLHUP :: 0x0010
+@(private="file")
+pollfd :: struct {
+	fd: c.int,
+	events: c.short,
+	revents: c.short,
+}
+nfds_t :: c.int
+
 when ODIN_OS == .Darwin {
 	foreign import libc "System.framework"
 	foreign libc {
@@ -52,6 +64,7 @@ when ODIN_OS == .Darwin {
 		@(link_name="waitpid") _waitpid :: proc(pid: pid_t, stat_loc: ^c.int, options: c.int) -> pid_t ---
 		@(link_name="dup2") _dup2 :: proc(filedes: c.int, filedes2: c.int) -> c.int ---
 		@(link_name="forkpty") _forkpty :: proc(amaster: ^c.int, name: cstring, termios: ^termios, winsize: ^winsize) -> pid_t ---
+		@(link_name="poll") _poll :: proc(fds: [^]pollfd, nfds: nfds_t, timeout: c.int) -> c.int ---
 	}
 } else {
 	#assert(false, "Platform is not supported")
@@ -205,4 +218,44 @@ _find :: proc(executable_name: string, allocator: mem.Allocator) -> (string, boo
 	}
 
     return found_path, found_path != ""
+}
+
+_read_handles_into_builders :: proc(handles: []_Builder_And_Handle) {
+	handles := handles
+	temp_buffer: [512]byte
+
+	poll_array := make_soa(#soa[]struct { poll: pollfd, sb: ^strings.Builder }, len(handles), context.temp_allocator)
+	for handle, i in handles {
+		poll_array[i] = {
+			poll = { fd = auto_cast handle.handle, events = POLLIN | POLLHUP },
+			sb = handle.sb,
+		}
+	}
+	for len(poll_array) > 0 {
+		polls, _ := soa_unzip(poll_array)
+		_poll(raw_data(polls), auto_cast len(polls), -1)
+		for i := 0; i < len(poll_array); {
+			p := poll_array[i]
+			if p.poll.revents & POLLIN != 0 {
+				for {
+					read_amount, err := os.read(auto_cast p.poll.fd, temp_buffer[:])
+					if read_amount == 0 || err != os.ERROR_NONE {
+						break
+					}
+					strings.write_string(p.sb, string(temp_buffer[:read_amount]))
+					more_to_read := pollfd { fd = p.poll.fd, events = POLLIN }
+					if _poll(&more_to_read, 1, 0) == 0 || more_to_read.revents & POLLIN == 0 {
+						break
+					}
+				}
+			}
+			if p.poll.revents & POLLHUP != 0 {
+				len_minus_one := len(poll_array) - 1
+				poll_array[i] = poll_array[len_minus_one]
+				poll_array = poll_array[:len_minus_one]
+			} else {
+				i += 1
+			}
+		}
+	}
 }

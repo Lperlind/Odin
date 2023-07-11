@@ -4,6 +4,7 @@ import "core:os"
 import "core:mem"
 import "core:strings"
 import "core:intrinsics"
+import "core:slice"
 
 Process_Handle :: struct {
 	handle: os.Handle,
@@ -66,12 +67,18 @@ delete :: proc(process: Process) {
 
 Run_Error :: intrinsics.type_merge(Spawn_Error, union { Error_Code })
 
+@(private)
+_Builder_And_Handle :: struct {
+	handle: os.Handle,
+	sb: ^strings.Builder,
+}
+
 Run_Result :: struct {
 	stdout: string,
 	stderr: string,
 }
 run :: proc(process_path: string, arguments: []string, options := Options {}) -> (Run_Result, Run_Error) {
-	if options.stdin == .Pipe do panic("Cannot use .Pipe")
+	if options.stdin == .Pipe do panic("Cannot use .Pipe with stdin")
 
 	process, err := spawn(process_path, arguments, options); if err != nil {
 		switch e in err {
@@ -83,19 +90,19 @@ run :: proc(process_path: string, arguments: []string, options := Options {}) ->
 
 	sb_out: strings.Builder
 	sb_err: strings.Builder
+
+	possible_handles_backing: [2]_Builder_And_Handle
+	possible_handles := slice.into_dynamic(possible_handles_backing[:])
 	if process.stdout != os.INVALID_HANDLE {
-		temp_buffer: [512]byte
-		for {
-			bytes_read, err := os.read(process.stdout, temp_buffer[:])
-			if err != os.ERROR_NONE || bytes_read == 0 {
-				break
-			}
-			strings.write_string(&sb_out, string(temp_buffer[:bytes_read]))
-		}
+		_, err := append(&possible_handles, _Builder_And_Handle { handle = process.stdout, sb = &sb_out })
+		assert(err == nil)
 	}
 	if process.stderr != os.INVALID_HANDLE {
-		panic("Cannot use.pipe with stderr right now")
+		_, err := append(&possible_handles, _Builder_And_Handle { handle = process.stderr, sb = &sb_err })
+		assert(err == nil)
 	}
+
+	_read_handles_into_builders(possible_handles[:])
 
 	res: Run_Result = {
 		stdout = strings.to_string(sb_out),
