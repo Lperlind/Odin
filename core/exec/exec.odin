@@ -18,16 +18,6 @@ Process :: struct {
 	stdin: os.Handle,
 }
 
-Process_Error :: struct {
-	message: string,
-}
-
-Error_Code :: int
-Run_Process_Error :: union {
-	mem.Allocator_Error,
-	Process_Error,
-	Error_Code,
-}
 Handle_Behaviour :: enum {
 	Inherit = 0, // zii behaviour
 	Pipe,
@@ -41,11 +31,20 @@ Options :: struct {
 	virtual_terminal: bool,
 }
 
-run :: proc(process_path: string, arguments: []string, options := Options {}) -> (Process, Run_Process_Error) {
+Error_Code :: int
+Exec_Error :: struct {
+	message: string,
+}
+
+Spawn_Error :: union {
+	mem.Allocator_Error,
+	Exec_Error,
+}
+spawn :: proc(process_path: string, arguments: []string, options := Options {}) -> (Process, Spawn_Error) {
 	if process_path == "" {
-		return {}, Process_Error { "empty process path" }
+		return {}, Exec_Error { "process_path is empty" }
 	}
-	return _run(process_path, arguments, options)
+	return _spawn(process_path, arguments, options)
 }
 
 wait :: proc(process: Process) -> Error_Code {
@@ -53,7 +52,7 @@ wait :: proc(process: Process) -> Error_Code {
 		panic("Process has not been created with a valid handle")
 	}
 	exit_code := _wait(process)
-	delete(process)
+	// delete(process)
 	return exit_code
 }
 
@@ -64,35 +63,49 @@ delete :: proc(process: Process) {
 	_delete(process)
 }
 
-run_and_get_stdout :: proc(process_path: string, arguments: []string, options := Options {}) -> (output: string, err: Run_Process_Error) {
-	options := options
-	options.stdout = .Pipe
-	process := run(process_path, arguments, options) or_return
+Run_Error :: union {
+	mem.Allocator_Error,
+	Exec_Error,
+	Error_Code,
+}
+Run_Result :: struct {
+	stdout: string,
+	stderr: string,
+}
+run :: proc(process_path: string, arguments: []string, options := Options {}) -> (Run_Result, Run_Error) {
+	if options.stdin == .Pipe do panic("Cannot use .Pipe")
+
+	process, err := spawn(process_path, arguments, options); if err != nil {
+		switch e in err {
+		case Exec_Error: return {}, e
+		case mem.Allocator_Error: return {}, e
+		}
+	}
 	defer delete(process)
 
-	sb: strings.Builder
-	temp_buffer: [512]byte
-	for {
-		bytes_read, err := os.read(process.stdout, temp_buffer[:])
-		if err != os.ERROR_NONE || bytes_read == 0 {
-			break
+	sb_out: strings.Builder
+	sb_err: strings.Builder
+	if process.stdout != os.INVALID_HANDLE {
+		temp_buffer: [512]byte
+		for {
+			bytes_read, err := os.read(process.stdout, temp_buffer[:])
+			if err != os.ERROR_NONE || bytes_read == 0 {
+				break
+			}
+			strings.write_string(&sb_out, string(temp_buffer[:bytes_read]))
 		}
-		strings.write_string(&sb, string(temp_buffer[:bytes_read]))
+	}
+	if process.stderr != os.INVALID_HANDLE {
+		panic("Cannot use.pipe with stderr right now")
+	}
+
+	res: Run_Result = {
+		stdout = strings.to_string(sb_out),
+		stderr = strings.to_string(sb_err),
 	}
 
 	exit_code := wait(process)
-	return strings.to_string(sb), exit_code == 0 ? nil : exit_code
-}
-
-run_and_wait :: proc(process_path: string, arguments: []string, options := Options {}) -> Run_Process_Error {
-	if options.stdout == .Pipe do panic("Cannot use .Pipe")
-	if options.stderr == .Pipe do panic("Cannot use .Pipe")
-	if options.stdin == .Pipe do panic("Cannot use .Pipe")
-
-	process := run(process_path, arguments, options) or_return
-	defer delete(process)
-	exit_code := wait(process)
-	return exit_code == 0 ? nil : exit_code
+	return res, exit_code == 0 ? nil : exit_code
 }
 
 find :: proc(executable_name: string, allocator := context.allocator) -> (string, bool) #optional_ok {

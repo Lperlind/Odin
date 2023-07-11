@@ -57,7 +57,7 @@ when ODIN_OS == .Darwin {
 	#assert(false, "Platform is not supported")
 }
 
-_run :: proc(process_path: string, arguments: []string, options := Options {}) -> (_p: Process, _err: Run_Process_Error) {
+_spawn :: proc(process_path: string, arguments: []string, options := Options {}) -> (_p: Process, _err: Spawn_Error) {
 	process: Process
 	pid: pid_t
 
@@ -112,7 +112,7 @@ _run :: proc(process_path: string, arguments: []string, options := Options {}) -
 		_close(pipe_stderr[READ])
 		_close(pipe_stdin[READ])
 
-		return {}, Process_Error{ "Failed to fork" }
+		return {}, Exec_Error{ "Failed to fork" }
 	case 0: // child
 		// NOTE: we perform the silent as a child since the parent then doesn't need to close anything
 		if options.stdout == .Nil do pipe_stdout[WRITE] = _null_fd()
