@@ -56,18 +56,19 @@ nfds_t :: c.int
 
 when ODIN_OS == .Darwin {
 	foreign import libc "System.framework"
-	foreign libc {
-		@(link_name="fork") _fork :: proc() -> pid_t ---
-		@(link_name="close") _close :: proc(filedes: c.int) -> c.int ---
-		@(link_name="pipe") _pipe :: proc(filedes: [^]c.int) -> c.int ---
-		@(link_name="execv") _execv :: proc(file: cstring, argv: [^]cstring) -> c.int ---
-		@(link_name="waitpid") _waitpid :: proc(pid: pid_t, stat_loc: ^c.int, options: c.int) -> pid_t ---
-		@(link_name="dup2") _dup2 :: proc(filedes: c.int, filedes2: c.int) -> c.int ---
-		@(link_name="forkpty") _forkpty :: proc(amaster: ^c.int, name: cstring, termios: ^termios, winsize: ^winsize) -> pid_t ---
-		@(link_name="poll") _poll :: proc(fds: [^]pollfd, nfds: nfds_t, timeout: c.int) -> c.int ---
-	}
 } else {
-	#assert(false, "Platform is not supported")
+	foreign import libc "system:c"
+}
+
+foreign libc {
+	@(link_name="fork") _fork :: proc() -> pid_t ---
+	@(link_name="close") _close :: proc(filedes: c.int) -> c.int ---
+	@(link_name="pipe") _pipe :: proc(filedes: [^]c.int) -> c.int ---
+	@(link_name="execv") _execv :: proc(file: cstring, argv: [^]cstring) -> c.int ---
+	@(link_name="waitpid") _waitpid :: proc(pid: pid_t, stat_loc: ^c.int, options: c.int) -> pid_t ---
+	@(link_name="dup2") _dup2 :: proc(filedes: c.int, filedes2: c.int) -> c.int ---
+	@(link_name="forkpty") _forkpty :: proc(amaster: ^c.int, name: cstring, termios: ^termios, winsize: ^winsize) -> pid_t ---
+	@(link_name="poll") _poll :: proc(fds: [^]pollfd, nfds: nfds_t, timeout: c.int) -> c.int ---
 }
 
 _spawn :: proc(process_path: string, arguments: []string, options := Options {}) -> (_p: Process, _err: Spawn_Error) {
