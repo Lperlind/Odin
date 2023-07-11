@@ -3,6 +3,7 @@ package exec
 import "core:os"
 import "core:mem"
 import "core:strings"
+import "core:intrinsics"
 
 Process_Handle :: struct {
 	handle: os.Handle,
@@ -63,11 +64,8 @@ delete :: proc(process: Process) {
 	_delete(process)
 }
 
-Run_Error :: union {
-	mem.Allocator_Error,
-	Exec_Error,
-	Error_Code,
-}
+Run_Error :: intrinsics.type_merge(Spawn_Error, union { Error_Code })
+
 Run_Result :: struct {
 	stdout: string,
 	stderr: string,
