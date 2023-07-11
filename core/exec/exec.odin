@@ -18,8 +18,8 @@ Process :: struct {
 	stdin: os.Handle,
 }
 
-Process_Error :: enum {
-	Fork_Failed,
+Process_Error :: struct {
+	message: string,
 }
 
 Error_Code :: int
@@ -40,35 +40,35 @@ Options :: struct {
 
 	virtual_terminal: bool,
 }
+
 run :: proc(process_path: string, arguments: []string, options := Options {}) -> (Process, Run_Process_Error) {
+	if process_path == "" {
+		return {}, Process_Error { "empty process path" }
+	}
 	return _run(process_path, arguments, options)
 }
 
-wait :: proc(process: Process) -> int {
+wait :: proc(process: Process) -> Error_Code {
 	if process.pid.handle <= 0 {
 		panic("Process has not been created with a valid handle")
 	}
 	exit_code := _wait(process)
+	delete(process)
 	return exit_code
 }
 
-delete :: proc(process: ^Process) {
-	assert(process != nil)
+delete :: proc(process: Process) {
 	if process.pid.handle <= 0 {
 		panic("Process has not been created with a valid handle")
 	}
-	_delete(process^)
-	process.pid = {}
-	process.stdout = os.INVALID_HANDLE
-	process.stderr = os.INVALID_HANDLE
-	process.stdin = os.INVALID_HANDLE
+	_delete(process)
 }
 
 run_and_get_stdout :: proc(process_path: string, arguments: []string, options := Options {}) -> (output: string, err: Run_Process_Error) {
 	options := options
 	options.stdout = .Pipe
 	process := run(process_path, arguments, options) or_return
-	defer delete(&process)
+	defer delete(process)
 
 	sb: strings.Builder
 	temp_buffer: [512]byte
@@ -90,7 +90,11 @@ run_and_wait :: proc(process_path: string, arguments: []string, options := Optio
 	if options.stdin == .Pipe do panic("Cannot use .Pipe")
 
 	process := run(process_path, arguments, options) or_return
-	defer delete(&process)
+	defer delete(process)
 	exit_code := wait(process)
 	return exit_code == 0 ? nil : exit_code
+}
+
+find :: proc(executable_name: string, allocator := context.allocator) -> (string, bool) #optional_ok {
+	return _find(executable_name, allocator)
 }
