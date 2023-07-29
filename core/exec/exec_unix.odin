@@ -155,16 +155,13 @@ _spawn :: proc(process_path: string, arguments: []string, options := Options {})
 		process.stdout = auto_cast pipe_stdout[READ]
 		process.stderr = auto_cast pipe_stderr[READ]
 		process.stdin = auto_cast pipe_stdin[WRITE]
-		process.pid = { handle = auto_cast pid, virtual_terminal_handle = options.virtual_terminal }
+		process.pid = { handle = auto_cast pid }
 	}
 	assert(pid != 0)
 	return process, {}
 }
 
 _wait :: proc(process: Process) -> int {
-	if process.pid.handle <= 0 {
-		return 255
-	}
 	_get_exit_code :: proc(code: c.int) -> int {
 		return code & 0o177 == 0 ? int(code >> 8) & 0xFF : int(code)
 	}
@@ -175,7 +172,6 @@ _wait :: proc(process: Process) -> int {
 }
 
 _delete :: proc(process: Process) {
-	assert(process.pid.handle > 0)
 	_close(auto_cast process.stdout)
 	_close(auto_cast process.stderr)
 	_close(auto_cast process.stdin)
@@ -207,9 +203,7 @@ _find :: proc(executable_name: string, allocator: mem.Allocator) -> (string, boo
 
     if strings.has_prefix(executable_name, "./") {
         found_path = _check_if_exists(os.get_current_directory(), executable_name, allocator)
-    }
-
-	if found_path == "" {
+    } else {
 		for folder in strings.split_by_byte_iterator(&path, ':') {
 			found_path = _check_if_exists(folder, executable_name, allocator)
 			if found_path != "" {

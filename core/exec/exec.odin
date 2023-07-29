@@ -8,9 +8,8 @@ import "core:slice"
 
 Process_Handle :: struct {
 	handle: os.Handle,
-	// NOTE: this is required by windows as you wait on threads rather than processes
-	// when opening a process via a virtual terminal
-	virtual_terminal_handle: bool,
+	// NOTE: this is required by windows as we need to close this handle
+	handleThread: os.Handle,
 }
 
 Process :: struct {
@@ -77,7 +76,7 @@ Run_Result :: struct {
 	stdout: string,
 	stderr: string,
 }
-run :: proc(process_path: string, arguments: []string, options := Options {}) -> (Run_Result, Run_Error) {
+run :: proc(process_path: string, arguments: []string = {}, options := Options {}) -> (Run_Result, Run_Error) {
 	if options.stdin == .Pipe do panic("Cannot use .Pipe with stdin")
 
 	process, err := spawn(process_path, arguments, options); if err != nil {
