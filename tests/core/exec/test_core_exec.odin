@@ -29,7 +29,7 @@ main :: proc() {
 @test
 test_build_echo :: proc(t: ^testing.T) {
     exec.run(exec.find("odin"), { "build", "echo" })
-    exec.run(exec.find("./echo"))
+    exec.run(exec.find("./echo"), options = { stderr = .Nil })
 }
 
 

@@ -30,6 +30,7 @@ Options :: struct {
 	stdin: Handle_Behaviour,
 
 	virtual_terminal: bool,
+	pipe_size: int,
 }
 
 Error_Code :: int
