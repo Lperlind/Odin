@@ -8,7 +8,6 @@ import "core:mem"
 import "core:strings"
 import "core:path/filepath"
 import "core:sys/windows"
-import "core:runtime"
 import "core:time"
 
 _find :: proc(executable_name: string, allocator: mem.Allocator) -> (string, bool) {
