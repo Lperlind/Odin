@@ -8,6 +8,8 @@ import "core:mem"
 import "core:strings"
 import "core:path/filepath"
 import "core:sys/windows"
+import "core:runtime"
+import "core:time"
 
 _find :: proc(executable_name: string, allocator: mem.Allocator) -> (string, bool) {
     executable_name := executable_name
@@ -45,7 +47,7 @@ _find :: proc(executable_name: string, allocator: mem.Allocator) -> (string, boo
 }
 
 _close_pipe :: proc(pipe: windows.HANDLE) {
-    if pipe != nil {
+    if pipe != windows.INVALID_HANDLE_VALUE {
         windows.CloseHandle(pipe)
     }
 }
@@ -67,7 +69,7 @@ _spawn :: proc(process_path: string, arguments: []string, options := Options {})
 	READ :: 0
 	WRITE :: 1
     _get_handle_for_type :: proc(behaviour: Handle_Behaviour, pipe_size: int, inherit_pipe: windows.HANDLE, inherit_index: int) -> ([2]windows.HANDLE, Spawn_Error) {
-        pipes: [2]windows.HANDLE
+        pipes: [2]windows.HANDLE = { windows.INVALID_HANDLE_VALUE, windows.INVALID_HANDLE_VALUE }
         switch behaviour {
         case .Inherit: pipes[inherit_index] = inherit_pipe
         case .Pipe:
@@ -86,24 +88,30 @@ _spawn :: proc(process_path: string, arguments: []string, options := Options {})
     stdout := _get_handle_for_type(options.stdout, options.pipe_size, auto_cast os.stdout, WRITE) or_return
     stderr := _get_handle_for_type(options.stderr, options.pipe_size, auto_cast os.stderr, WRITE) or_return
     // Prevent our handles from being written/read
-    if stdin[WRITE] != nil {
+    if stdin[WRITE] != windows.INVALID_HANDLE_VALUE {
         windows.SetHandleInformation(stdin[WRITE], windows.HANDLE_FLAG_INHERIT, 0)
     }
-    if stdout[READ] != nil {
+    if stdout[READ] != windows.INVALID_HANDLE_VALUE {
         windows.SetHandleInformation(stdout[READ], windows.HANDLE_FLAG_INHERIT, 0)
     }
-    if stderr[READ] != nil {
+    if stderr[READ] != windows.INVALID_HANDLE_VALUE {
         windows.SetHandleInformation(stderr[READ], windows.HANDLE_FLAG_INHERIT, 0)
     }
     did_spawn: bool
     defer {
-        _close_pipe(stdin[READ])
-        _close_pipe(stdin[WRITE])
-        _close_pipe(stdin[WRITE])
+        if options.stdin != .Inherit {
+            _close_pipe(stdin[READ])
+        }
+        if options.stdout != .Inherit {
+            _close_pipe(stdout[WRITE])
+        }
+        if options.stderr != .Inherit {
+            _close_pipe(stderr[WRITE])
+        }
         if ! did_spawn {
             _close_pipe(stdin[WRITE])
-            _close_pipe(stdin[READ])
-            _close_pipe(stdin[READ])
+            _close_pipe(stdout[READ])
+            _close_pipe(stderr[READ])
         }
     }
 
@@ -115,7 +123,6 @@ _spawn :: proc(process_path: string, arguments: []string, options := Options {})
         dwFlags = windows.STARTF_USESTDHANDLES,
     }
     process_info: windows.PROCESS_INFORMATION
-
     did_spawn = bool(windows.CreateProcessW(
         lpApplicationName = nil,
         lpCommandLine = windows.utf8_to_wstring(strings.to_string(sb), context.temp_allocator),
@@ -135,9 +142,10 @@ _spawn :: proc(process_path: string, arguments: []string, options := Options {})
         handle = os.Handle(process_info.hProcess),
         handleThread = os.Handle(process_info.hThread)
     }
+
     process.stdin = auto_cast stdin[WRITE]
-    process.stdout = auto_cast stdin[READ]
-    process.stderr = auto_cast stdin[READ]
+    process.stdout = auto_cast stdout[READ]
+    process.stderr = auto_cast stderr[READ]
 
     return process, {}
 }
@@ -160,4 +168,48 @@ _delete :: proc(process: Process) {
 }
 
 _read_handles_into_builders :: proc(handles: []_Builder_And_Handle) {
+    handles := handles
+    if len(handles) == 0 {
+        return
+    }
+
+    for _, i in handles {
+        no_wait := windows.PIPE_NOWAIT
+        if ! windows.SetNamedPipeHandleState(auto_cast handles[i].handle, &no_wait, nil, nil) {
+            fmt.panicf("Failed to set windows pipe: %v", windows.GetLastError())
+        }
+
+    }
+
+    read_buffer: [512]byte
+    for len(handles) > 0 {
+        // Asynchronous (overlapped) read and write operations are not supported by anonymous pipes.
+        // very lame windows, just sleep and read I guess? Or we could spawn threads
+        bytes_read: windows.DWORD
+        for i := 0; i < len(handles); {
+            for {
+                ok := windows.ReadFile(
+                    auto_cast handles[i].handle,
+                    raw_data(&read_buffer),
+                    len(read_buffer),
+                    &bytes_read,
+                    nil,
+                )
+                if ok {
+                    strings.write_string(handles[i].sb, string(read_buffer[:bytes_read]))
+                } else {
+                    if windows.GetLastError() != windows.ERROR_NO_DATA {
+                        len_minus_one := len(handles) - 1
+                        handles[i] = handles[len_minus_one]
+                        handles = handles[:len_minus_one]
+                    }
+                    else {
+                        i += 1
+                    }
+                    break
+                }
+            }
+        }
+        time.sleep(time.Millisecond)
+    }
 }
